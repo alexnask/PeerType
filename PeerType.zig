@@ -239,7 +239,7 @@ fn typesMatchConstCastOnly(comptime wanted: type, comptime actual: type, comptim
         }
 
         if (wanted_info == .Int and actual_info == .Int) {
-            if (wanted_info.Int.is_signed != actual_info.Int.is_signed or
+            if (wanted_info.Int.signedness != actual_info.Int.signedness or
                 wanted_info.Int.bits != actual_info.Int.bits)
             {
                 return false;
@@ -541,7 +541,7 @@ pub fn PeerType(comptime types: anytype) ?type {
         }
 
         if (prev_info == .Int and cur_info == .Int and
-            prev_info.Int.is_signed == cur_info.Int.is_signed)
+            prev_info.Int.signedness == cur_info.Int.signedness)
         {
             if (cur_info.Int.bits > prev_info.Int.bits) {
                 prev_type = cur_type;
