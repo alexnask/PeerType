@@ -847,6 +847,54 @@ pub fn coercesTo(comptime dst: type, comptime src: type) bool {
     return (PeerType(.{ dst, src }) orelse return false) == dst;
 }
 
+const ContainsAnytype = struct { val: anytype };
+const AnyType = std.meta.fieldInfo(ContainsAnytype, "val").field_type;
+
+pub fn requiresComptime(comptime T: type) bool {
+    comptime {
+        switch (T) {
+            AnyType,
+            comptime_int,
+            comptime_float,
+            type,
+            @Type(.EnumLiteral),
+            @Type(.Null),
+            @Type(.Undefined),
+            => return true,
+            else => {},
+        }
+
+        const info = @typeInfo(T);
+        switch (info) {
+            .BoundFn => return true,
+            .Array => |a| return requiresComptime(a.child),
+            .Struct => |s| {
+                for (s.fields) |f| {
+                    if (requiresComptime(f.field_type))
+                        return true;
+                }
+                return false;
+            },
+            .Union => |u| {
+                for (u.fields) |f| {
+                    if (requiresComptime(f.field_type))
+                        return true;
+                }
+                return false;
+            },
+            .Optional => |o| return requiresComptime(o.child),
+            .ErrorUnion => |u| return requiresComptime(u.payload),
+            .Pointer => |p| {
+                if (@typeInfo(p.child) == .Opaque)
+                    return false;
+                return requiresComptime(p.child);
+            },
+            .Fn => |f| return f.is_generic,
+            else => return false,
+        }
+    }
+}
+
 fn testPeerTypeIs(comptime types: anytype, comptime result: type) void {
     std.testing.expect((PeerType(types) orelse unreachable) == result);
 }
@@ -861,17 +909,24 @@ test "PeerType" {
 
     const E1 = error{OutOfMemory};
     const E2 = error{};
-    const S = struct{};
+    const S = struct {};
     testPeerTypeIs(.{ E1, E2 }, E1);
     testPeerTypeIs(.{ E1, anyerror!S, E2 }, anyerror!S);
 
     testPeerTypeIs(.{ *align(16) usize, *align(2) usize }, *align(2) usize);
 
     testNoPeerType(.{ usize, void });
-    testNoPeerType(.{ struct{}, struct{} });
+    testNoPeerType(.{ struct {}, struct {} });
 }
 
 test "coercesTo" {
-    std.testing.expect(coercesTo([]const u8, *const [123:0] u8));
+    std.testing.expect(coercesTo([]const u8, *const [123:0]u8));
     std.testing.expect(coercesTo(usize, comptime_int));
+}
+
+test "requiresComptime" {
+    std.testing.expect(requiresComptime(comptime_int));
+    std.testing.expect(requiresComptime(struct { foo: anytype }));
+    std.testing.expect(requiresComptime(struct { foo: struct { bar: comptime_float } }));
+    std.testing.expect(!requiresComptime(struct { foo: void }));
 }
