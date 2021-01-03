@@ -848,7 +848,7 @@ pub fn coercesTo(comptime dst: type, comptime src: type) bool {
 }
 
 const ContainsAnytype = struct { val: anytype };
-const AnyType = std.meta.fieldInfo(ContainsAnytype, "val").field_type;
+const AnyType = std.meta.fieldInfo(ContainsAnytype, std.meta.FieldEnum(ContainsAnytype).val).field_type;
 
 pub fn requiresComptime(comptime T: type) bool {
     comptime {
